@@ -142,6 +142,11 @@ public class ServicioMensajeria {
                     "Se superó el máximo de " + limitePorHora + " correos por hora. Intente más tarde."),
                     solicitud.remitente, null);
         }
+        if (solicitud.errorCodificacion != null) {
+            // El asunto no pudo decodificarse con certeza: no se ejecuta nada, solo se explica el motivo.
+            return new Resolucion(ResultadoOperacion.error("Asunto con codificación no válida",
+                    conPuntoFinal(solicitud.errorCodificacion)), solicitud.remitente, null);
+        }
         if (solicitud.comando == null) {
             return new Resolucion(ResultadoOperacion.error("Sintaxis inválida",
                     conPuntoFinal(solicitud.errorSintaxis)

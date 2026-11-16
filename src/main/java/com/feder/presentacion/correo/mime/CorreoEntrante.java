@@ -12,12 +12,16 @@ import java.util.Set;
  * @param fromNombre       nombre para mostrar del remitente, decodificado, o null
  * @param replyTo          dirección de Reply-To en minúsculas, o null
  * @param returnPath       valor crudo de Return-Path (p. ej. "&lt;&gt;"), o null
- * @param subject          asunto decodificado a Unicode ("" si falta)
+ * @param subject          asunto decodificado a Unicode ("" si falta); las palabras RFC 2047 que no pudieron
+ *                         decodificarse quedan literales
  * @param autoSubmitted    valor de Auto-Submitted, o null
  * @param precedence       valor de Precedence, o null
  * @param fecha            valor crudo de Date, o null
  * @param contentType      valor crudo de Content-Type, o null
  * @param nombresCabeceras nombres de todas las cabeceras tal como llegaron, en orden
+ * @param errorCodificacionAsunto motivo por el que el asunto no pudo decodificarse con certeza (palabra RFC 2047
+ *                         inválida o bytes de 8 bits que no son UTF-8), o null si se decodificó por completo.
+ *                         Con un motivo, el asunto no debe ejecutarse como comando
  */
 public record CorreoEntrante(
         String messageId,
@@ -30,7 +34,8 @@ public record CorreoEntrante(
         String precedence,
         String fecha,
         String contentType,
-        List<String> nombresCabeceras) {
+        List<String> nombresCabeceras,
+        String errorCodificacionAsunto) {
 
     private static final Set<String> PRECEDENCIAS_MASIVAS = Set.of("bulk", "junk", "list");
     private static final Set<String> BUZONES_DE_SISTEMA = Set.of("mailer-daemon", "postmaster");

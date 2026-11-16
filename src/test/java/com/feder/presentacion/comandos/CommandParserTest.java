@@ -1,5 +1,6 @@
 package com.feder.presentacion.comandos;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -115,6 +116,20 @@ class CommandParserTest {
         assertEquals(10, e.posicion());
         assertThrows(ErrorSintaxisException.class, () -> parser.analizar("INSCAT[\"a\tb\"]"));
         assertThrows(ErrorSintaxisException.class, () -> parser.analizar("INSCAT[\"a\u007Fb\"]"));
+        // Controles C1 (U+0080-U+009F): tampoco son texto.
+        assertThrows(ErrorSintaxisException.class, () -> parser.analizar("INSCAT[\"a\u0085b\"]"));
+        assertThrows(ErrorSintaxisException.class, () -> parser.analizar("INSCAT[\"a\u0093b\u0094\"]"));
+    }
+
+    @Test
+    void rechazaElCaracterDeReemplazoPorqueIndicaTextoDanado() {
+        ErrorSintaxisException e = assertThrows(ErrorSintaxisException.class,
+                () -> parser.analizar("INSCAT[\"Caf\uFFFD\",\"x\"]"));
+        assertEquals(12, e.posicion());
+        assertTrue(e.getMessage().contains("U+FFFD"), e.getMessage());
+        assertThrows(ErrorSintaxisException.class, () -> parser.analizar("INSCAT\uFFFD[\"x\",\"y\"]"));
+        // Los demás caracteres no ASCII siguen admitiéndose.
+        assertDoesNotThrow(() -> parser.analizar("INSCAT[\"Café € «Ñandú»\",\"x\"]"));
     }
 
     @Test

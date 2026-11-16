@@ -24,6 +24,8 @@ final class LexerComando {
 
     private enum Estado { ENTRE_TOKENS, EN_NOMBRE, EN_CADENA, EN_ESCAPE }
 
+    private static final int REEMPLAZO = 0xFFFD;
+
     private final String texto;
     private int indice;
     private int posicion = 1;
@@ -50,6 +52,8 @@ final class LexerComando {
                     valor.appendCodePoint(cp);
                 } else if (cp == '"') {
                     estado = Estado.EN_CADENA;
+                } else if (cp == REEMPLAZO) {
+                    throw textoDanado(posicion);
                 } else if (esNoPermitido(cp)) {
                     throw new ErrorSintaxisException("Carácter de control no permitido (" + codigo(cp)
                             + ") en la posición " + posicion, posicion);
@@ -73,6 +77,8 @@ final class LexerComando {
                 if (cp == '\\') {
                     estado = Estado.EN_ESCAPE;
                     posicionEscape = posicion;
+                } else if (cp == REEMPLAZO) {
+                    throw textoDanado(posicion);
                 } else if (esNoPermitido(cp)) {
                     throw new ErrorSintaxisException("Carácter de control no permitido (" + codigo(cp)
                             + ") dentro del parámetro, en la posición " + posicion, posicion);
@@ -119,9 +125,18 @@ final class LexerComando {
         return (cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z');
     }
 
-    /** Controles C0, DEL y sustitutos sueltos (texto UTF-16 corrupto). */
+    /**
+     * U+FFFD es el carácter que pone un programa cuando no pudo leer unos bytes: nunca es un dato legítimo.
+     * Si llega, el texto se dañó antes (por ejemplo en otro servidor) y no debe guardarse.
+     */
+    private static ErrorSintaxisException textoDanado(int posicion) {
+        return new ErrorSintaxisException("El asunto contiene el carácter de reemplazo U+FFFD en la posición " + posicion
+                + ": el texto llegó dañado por un problema de codificación. Escriba de nuevo el comando", posicion);
+    }
+
+    /** Controles C0, DEL, controles C1 (U+0080-U+009F) y sustitutos sueltos (texto UTF-16 corrupto). */
     private static boolean esNoPermitido(int cp) {
-        return cp <= 0x1F || cp == 0x7F || (cp >= 0xD800 && cp <= 0xDFFF);
+        return cp <= 0x1F || (cp >= 0x7F && cp <= 0x9F) || (cp >= 0xD800 && cp <= 0xDFFF);
     }
 
     private static String codigo(int cp) {

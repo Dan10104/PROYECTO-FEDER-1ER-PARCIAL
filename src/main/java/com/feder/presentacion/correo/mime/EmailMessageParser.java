@@ -34,7 +34,18 @@ public final class EmailMessageParser {
             throw new MensajeInvalidoException("La cabecera From no contiene una única dirección válida");
         }
         AnalizadorDireccion.Direccion responderA = AnalizadorDireccion.analizar(primera(cabeceras, "Reply-To"));
-        String asunto = primera(cabeceras, "Subject");
+
+        // El asunto se entrega fiel, sin quitar caracteres de control: el analizador de comandos
+        // los rechaza indicando la posición, lo que resulta más útil para el usuario.
+        String asunto = "";
+        String errorAsunto = null;
+        Cabecera subject = primeraCabecera(cabeceras, "Subject");
+        if (subject != null) {
+            DecodificadorRfc2047.Resultado decodificado = DecodificadorRfc2047.analizar(subject.valor());
+            asunto = decodificado.texto();
+            // Primero los bytes de 8 bits que no son UTF-8 (afectan a todo el valor) y luego las palabras RFC 2047.
+            errorAsunto = subject.errorCodificacion() != null ? subject.errorCodificacion() : decodificado.error();
+        }
 
         List<String> nombres = new ArrayList<>(cabeceras.size());
         for (Cabecera cabecera : cabeceras) {
@@ -46,14 +57,13 @@ public final class EmailMessageParser {
                 remitente.nombre(),
                 responderA == null ? null : responderA.direccion(),
                 primera(cabeceras, "Return-Path"),
-                // El asunto se entrega fiel, sin quitar caracteres de control: el analizador de comandos
-                // los rechaza indicando la posición, lo que resulta más útil para el usuario.
-                asunto == null ? "" : DecodificadorRfc2047.decodificar(asunto),
+                asunto,
                 primera(cabeceras, "Auto-Submitted"),
                 primera(cabeceras, "Precedence"),
                 primera(cabeceras, "Date"),
                 primera(cabeceras, "Content-Type"),
-                nombres);
+                nombres,
+                errorAsunto);
     }
 
     private static void exigirUnica(List<Cabecera> cabeceras, String nombre) throws MensajeInvalidoException {
@@ -65,9 +75,14 @@ public final class EmailMessageParser {
     }
 
     private static String primera(List<Cabecera> cabeceras, String nombre) {
+        Cabecera cabecera = primeraCabecera(cabeceras, nombre);
+        return cabecera == null ? null : cabecera.valor();
+    }
+
+    private static Cabecera primeraCabecera(List<Cabecera> cabeceras, String nombre) {
         for (Cabecera cabecera : cabeceras) {
             if (cabecera.nombre().equalsIgnoreCase(nombre)) {
-                return cabecera.valor();
+                return cabecera;
             }
         }
         return null;

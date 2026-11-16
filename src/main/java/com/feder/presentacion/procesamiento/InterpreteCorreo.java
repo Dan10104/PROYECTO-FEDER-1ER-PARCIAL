@@ -12,9 +12,16 @@ import java.util.logging.Logger;
 
 /**
  * Convierte los bytes de un correo recibido en una {@link SolicitudCorreo} para la capa de negocio:
- * extrae From y Subject, descarta rebotes y respuestas automáticas, y analiza la sintaxis del comando.
+ * extrae From y Subject, descarta rebotes y respuestas automáticas, rechaza los asuntos que no pudieron
+ * decodificarse con certeza (codificación MIME inválida) y analiza la sintaxis del comando.
  */
 public class InterpreteCorreo {
+
+    /**
+     * Asunto que se registra y se repite en la respuesta cuando no pudo decodificarse: un texto fijo. Así ningún
+     * dato de un asunto dudoso (por ejemplo, un código de CONFIRMAR) queda en el registro de mensajes.
+     */
+    public static final String ASUNTO_NO_DECODIFICABLE = "(asunto con codificación no válida)";
 
     private static final Logger ERROR = Logger.getLogger("feder.error");
 
@@ -38,12 +45,21 @@ public class InterpreteCorreo {
             return SolicitudCorreo.automatica(buzon, uidl, null, "desconocido", null);
         }
         String remitente = correo.from();
+        boolean decodificado = correo.errorCodificacionAsunto() == null;
+        String asunto = !decodificado ? ASUNTO_NO_DECODIFICABLE : correo.subject() == null ? "" : correo.subject();
         // Un correo enviado por el propio sistema (por ejemplo, una respuesta reenviada) nunca se procesa:
         // así una respuesta automática no puede convertirse en un comando nuevo.
         if (correo.esRespuestaAutomatica() || remitente.equalsIgnoreCase(direccionSistema)) {
-            return SolicitudCorreo.automatica(buzon, uidl, correo.messageId(), remitente, correo.subject());
+            return SolicitudCorreo.automatica(buzon, uidl, correo.messageId(), remitente, asunto);
         }
-        String asunto = correo.subject() == null ? "" : correo.subject();
+        if (!decodificado) {
+            // Nunca se adivinan caracteres: un asunto que no se pudo decodificar con certeza no se ejecuta.
+            // Se comprueba después de descartar las respuestas automáticas, para no contestar a otros sistemas.
+            return SolicitudCorreo.conErrorCodificacion(buzon, uidl, correo.messageId(), remitente, asunto,
+                    "No se pudo decodificar el asunto del correo: " + correo.errorCodificacionAsunto()
+                            + ". No se ejecutó ningún comando. Vuelva a enviarlo escrito como texto simple"
+                            + " o con una codificación válida (por ejemplo, UTF-8)");
+        }
         try {
             ComandoAnalizado comando = analizadorComandos.analizar(asunto);
             return SolicitudCorreo.conComando(buzon, uidl, correo.messageId(), remitente, asunto,

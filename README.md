@@ -171,6 +171,38 @@ COMANDO["parametro1","parametro2",...]
 - Si hay un error de sintaxis, la respuesta indica la posición exacta y, si el nombre se parece a
   un comando existente, lo sugiere.
 
+### Codificación del asunto
+
+Los clientes de correo envían las tildes y la ñ del asunto como «palabras codificadas» de RFC 2047
+(`=?UTF-8?B?...?=` o `=?ISO-8859-1?Q?...?=`). El sistema las decodifica de forma **estricta**: nunca
+adivina caracteres. Así se garantiza que un comando nunca llegue a la base de datos con texto alterado
+(por ejemplo `Caf�` en lugar de `Café`).
+
+- **Codificación válida**: el comando se procesa normalmente. Se admiten UTF-8, ISO-8859-1, windows-1252,
+  US-ASCII, UTF-16, UTF-32 y los demás juegos estándar, en Base64 o en Q. También se admiten palabras
+  contiguas, cabeceras plegadas y un carácter UTF-8 partido entre dos palabras (cada palabra en otro juego
+  se decodifica por separado).
+- **Codificación inválida**: el correo se responde con el título «Asunto con codificación no válida» y el
+  motivo: juego de caracteres desconocido o no admitido, Base64 mal formado, codificación Q mal formada o
+  bytes que no son texto válido en el juego declarado. **No se ejecuta ningún comando** ni se modifica
+  ningún dato de negocio. En el registro de mensajes el asunto queda como «(asunto con codificación no
+  válida)», para no guardar datos dudosos como un código de confirmación. Las respuestas automáticas y los
+  rebotes se descartan antes y nunca se contestan.
+- **Bytes de 8 bits sin codificar** (sin RFC 2047): se decide cabecera por cabecera. En el asunto solo se
+  acepta UTF-8 válido (RFC 6532). Cualquier otro byte de 8 bits se rechaza, porque no permite saber qué se
+  escribió: un asunto Latin-1 y uno UTF-8 truncado se ven iguales. Los clientes actuales nunca envían así el
+  asunto. En las demás cabeceras (por ejemplo, el nombre del remitente) esos bytes se leen como ISO-8859-1,
+  por compatibilidad con clientes antiguos.
+- Una palabra codificada pegada a otro texto (por ejemplo dentro de comillas: `HELP["=?UTF-8?Q?=2A?="]`)
+  no se decodifica: es un dato literal (RFC 2047 §5).
+- Las etiquetas de ISO-8859-1 se interpretan como windows-1252, igual que en los navegadores, para aceptar
+  € y las comillas tipográficas. No se admiten los juegos propios de Java (`x-...`: autodetección,
+  variantes con marca de orden de bytes), CESU-8 ni los juegos con estado ISO-2022-KR e ISO-2022-CN. En
+  ISO-2022-JP cada palabra debe terminar en modo ASCII (RFC 1468), para que no cambie el sentido de la siguiente.
+- Los parámetros no pueden contener caracteres de control (C0, DEL ni C1) ni el carácter de reemplazo
+  U+FFFD, que indica un texto dañado antes de llegar al sistema.
+- Un nombre de remitente mal codificado se muestra literal y no impide procesar el comando.
+
 ## Configuración
 
 El entorno se elige con la variable **`APP_ENV`** (`local` o `tecnoweb`), sin tocar código. Cada valor

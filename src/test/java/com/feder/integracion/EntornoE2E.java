@@ -6,6 +6,10 @@ import com.feder.herramientas.clientedemo.ClienteDemo;
 import com.feder.herramientas.correolocal.ConfiguracionCorreoLocal;
 import com.feder.herramientas.correolocal.ServidorCorreoLocal;
 import com.feder.presentacion.correo.CorreoException;
+import com.feder.presentacion.correo.ParametrosConexion;
+import com.feder.presentacion.correo.TransporteSeguro;
+import com.feder.presentacion.correo.smtp.MecanismoAutenticacion;
+import com.feder.presentacion.correo.smtp.SmtpClient;
 import com.feder.presentacion.procesamiento.CicloCorreo;
 import com.feder.pruebas.DestinoPruebas;
 import org.junit.jupiter.api.Assumptions;
@@ -74,6 +78,23 @@ final class EntornoE2E implements AutoCloseable {
 
     void enviar(String de, String asunto) throws CorreoException {
         cliente.enviar(de, CLAVE, SISTEMA, asunto);
+    }
+
+    /**
+     * Envía por SMTP real (cliente de sockets del proyecto, AUTH PLAIN) los bytes exactos de un mensaje:
+     * sirve para probar cabeceras codificadas o de 8 bits tal como las mandaría otro cliente de correo.
+     */
+    void enviarCrudo(String de, byte[] mensaje) throws CorreoException {
+        ParametrosConexion parametros = ParametrosConexion.hacia("127.0.0.1", correo.puertoSmtp())
+                .transporte(TransporteSeguro.NINGUNO)
+                .credenciales(de, CLAVE)
+                .permitirTextoPlano(true)
+                .construir();
+        try (SmtpClient smtp = new SmtpClient(parametros, MecanismoAutenticacion.PLAIN, "pruebas.local")) {
+            smtp.conectar();
+            smtp.enviar(de, SISTEMA, mensaje);
+            smtp.quit();
+        }
     }
 
     /** Entrega un mensaje con cabeceras arbitrarias directamente en el buzón del sistema. */
